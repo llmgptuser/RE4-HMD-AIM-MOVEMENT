@@ -3,7 +3,13 @@ if reframework:get_game_name() ~= "re4" then
 end
 
 local cfg = {
-    smooth_turn_speed = 0.04,
+    gaze_distance = 0.0,
+    snap_turn_enabled = true,
+    snap_turn_back_enabled = true,
+    snap_turn_angle = 45.0,
+    recenter_threshold = 0.4,
+    tilt_threshold = 0.8,
+    smooth_turn_speed = 3.0,
 }
 
 local cfg_path = "re4_vr/re4_vr_hmd_aim_movement_config.json"
@@ -44,6 +50,18 @@ local function get_right_input_axis()
     return pad:get_AxisR()
 end
 
+local function math_sign(x)
+    if x > 0 then
+        return 1
+    elseif x < 0 then
+        return -1
+    else
+        return 0
+    end
+end
+
+local is_stick_centered = true
+local is_stick_centered_y = true
 local turn_yaw_radians = 0
 sdk.hook(
     sdk.find_type_definition("chainsaw.TwirlerCameraControllerRoot"):get_method("setYaw"),
@@ -59,12 +77,32 @@ sdk.hook(
 
         local right_stick_axis = get_right_input_axis()
         local x_axis = right_stick_axis.x
-        turn_yaw_radians = turn_yaw_radians - x_axis * cfg.smooth_turn_speed
+        local y_axis = right_stick_axis.y
+        if cfg.snap_turn_enabled then
+            if is_stick_centered then
+                if math.abs(x_axis) > cfg.tilt_threshold then
+                    is_stick_centered = false
+                    snap_turn_sign = math_sign(x_axis)
+                    turn_yaw_radians = turn_yaw_radians - math.rad(snap_turn_sign * cfg.snap_turn_angle)
+                end
+            elseif math.abs(x_axis) < cfg.recenter_threshold then
+                is_stick_centered = true
+            end
+            if cfg.snap_turn_back_enabled and is_stick_centered then
+                if is_stick_centered_y then
+                    if y_axis < -cfg.tilt_threshold then
+                        is_stick_centered_y = false
+                        turn_yaw_radians = turn_yaw_radians + math.rad(180.0)
+                    end
+                elseif math.abs(y_axis) < cfg.recenter_threshold then
+                    is_stick_centered_y = true
+                end
+            end
+        else
+            turn_yaw_radians = turn_yaw_radians - x_axis * math.rad(cfg.smooth_turn_speed)
+        end
 
         args[3] = sdk.float_to_ptr(yaw_radians + turn_yaw_radians)
-
-        local origin = Vector3f.new(0.15,  - 0.02, 0.33)
-        vrmod:set_standing_origin(origin)
     end,
     function(retval)
         return retval
@@ -95,6 +133,23 @@ sdk.hook(
     function(args)
     end,
     function(retval)
-        return sdk.float_to_ptr(0.0)
+        return sdk.float_to_ptr(cfg.gaze_distance)
     end
 )
+
+re.on_draw_ui(function()
+    local changed = false
+    if imgui.tree_node("HMD Aim and Enhanced Movement") then
+        changed, cfg.gaze_distance = imgui.drag_float("Camera Orbiting Distance", cfg.gaze_distance, 0.1, 0.0, 1.5)
+        changed, cfg.snap_turn_enabled = imgui.checkbox("Snap Turn Enabled", cfg.snap_turn_enabled)
+        if cfg.snap_turn_enabled then
+            changed, cfg.snap_turn_angle = imgui.drag_float("Snap Turn Angle", cfg.snap_turn_angle, 15.0, 15.0, 90.0)
+            changed, cfg.tilt_threshold = imgui.drag_float("Snap Turn Tilt Threshold", cfg.tilt_threshold, 0.05, 0.1, 1.0)
+            changed, cfg.recenter_threshold = imgui.drag_float("Snap Turn Recenter Threshold", cfg.recenter_threshold, 0.05, 0.1, 1.0)
+            changed, cfg.snap_turn_back_enabled = imgui.checkbox("Tild Down to Turn Back Enabled", cfg.snap_turn_back_enabled)
+        else
+            changed, cfg.smooth_turn_speed = imgui.drag_float("Smooth Turn Speed", cfg.smooth_turn_speed, 1.0, 1.0, 50.0)
+        end
+        imgui.tree_pop()
+    end
+end)
