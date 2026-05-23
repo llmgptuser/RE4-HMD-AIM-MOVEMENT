@@ -3,7 +3,7 @@ if reframework:get_game_name() ~= "re4" then
 end
 
 local cfg = {
-    gaze_distance_multiplier_levels = 5,
+    gaze_distance_multiplier_levels = 3,
     gaze_distance_multiplier = 1.0,
     enable_gaze_distance_multiplier_cycle = true,
     snap_turn_enabled = true,
