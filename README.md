@@ -12,7 +12,7 @@ Installation:
 - Place re4_vr_hmd_aim_movement.lua under reframework\autorun under your RE4 game dir.
 - If you use the PD upscaler version, you might need to set "Rendering Technique" to "Two Frame Sequential" (if "Single Frame Multipass" doesn't work) under "VR" of REFramework in-game menu.
 - Adjust settings in "HMD Aim and Enhanced Movement" under "Script Generated UI".
-  - Increase "Camera Orbiting Distance" if the player character is too close.
+  - "Camera Orbiting Distance" can be cycled through by tilting up the right stick.
   - Smooth turning speed is adjustable under Script Generated UI not game's settings.
 
 In game settings:
