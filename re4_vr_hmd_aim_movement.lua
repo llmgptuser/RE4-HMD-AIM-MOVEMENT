@@ -3,7 +3,9 @@ if reframework:get_game_name() ~= "re4" then
 end
 
 local cfg = {
-    gaze_distance = 0.0,
+    gaze_distance_multiplier_levels = 5,
+    gaze_distance_multiplier = 1.0,
+    enable_gaze_distance_multiplier_cycle = true,
     snap_turn_enabled = true,
     snap_turn_back_enabled = true,
     snap_turn_angle = 45.0,
@@ -63,6 +65,7 @@ end
 local is_stick_centered = true
 local is_stick_centered_y = true
 local turn_yaw_radians = 0
+local gaze_distance_multiplier_level = 0
 sdk.hook(
     sdk.find_type_definition("chainsaw.TwirlerCameraControllerRoot"):get_method("setYaw"),
     function(args)
@@ -101,7 +104,16 @@ sdk.hook(
         else
             turn_yaw_radians = turn_yaw_radians - x_axis * math.rad(cfg.smooth_turn_speed)
         end
-
+        if is_stick_centered then
+            if is_stick_centered_y then
+                if y_axis > cfg.tilt_threshold then
+                    is_stick_centered_y = false
+                    gaze_distance_multiplier_level = (gaze_distance_multiplier_level + 1) % cfg.gaze_distance_multiplier_levels
+                end
+            elseif math.abs(y_axis) < cfg.recenter_threshold then
+                is_stick_centered_y = true
+            end
+        end       
         args[3] = sdk.float_to_ptr(yaw_radians + turn_yaw_radians)
     end,
     function(retval)
@@ -133,14 +145,17 @@ sdk.hook(
     function(args)
     end,
     function(retval)
-        return sdk.float_to_ptr(cfg.gaze_distance)
+        if cfg.enable_gaze_distance_multiplier_cycle then
+            return sdk.float_to_ptr(sdk.to_float(retval) * (1.0 - gaze_distance_multiplier_level / (cfg.gaze_distance_multiplier_levels-1)))
+        else
+            return sdk.float_to_ptr(sdk.to_float(retval) * cfg.gaze_distance_multiplier)
+        end
     end
 )
 
 re.on_draw_ui(function()
     local changed = false
     if imgui.tree_node("HMD Aim and Enhanced Movement") then
-        changed, cfg.gaze_distance = imgui.drag_float("Camera Orbiting Distance", cfg.gaze_distance, 0.1, 0.0, 1.5)
         changed, cfg.snap_turn_enabled = imgui.checkbox("Snap Turn Enabled", cfg.snap_turn_enabled)
         if cfg.snap_turn_enabled then
             changed, cfg.snap_turn_angle = imgui.drag_float("Snap Turn Angle", cfg.snap_turn_angle, 15.0, 15.0, 90.0)
@@ -149,6 +164,12 @@ re.on_draw_ui(function()
             changed, cfg.snap_turn_back_enabled = imgui.checkbox("Tild Down to Turn Back Enabled", cfg.snap_turn_back_enabled)
         else
             changed, cfg.smooth_turn_speed = imgui.drag_float("Smooth Turn Speed", cfg.smooth_turn_speed, 1.0, 1.0, 50.0)
+        end
+        changed, cfg.enable_gaze_distance_multiplier_cycle = imgui.checkbox("Tilt Up Right Stick to Cycle through Camera Orbiting Distances", cfg.enable_gaze_distance_multiplier_cycle)
+        if cfg.enable_gaze_distance_multiplier_cycle then
+            changed, cfg.gaze_distance_multiplier_levels = imgui.drag_int("Camera Orbiting Distance Steps", cfg.gaze_distance_multiplier_levels, 1, 2, 10)
+        else
+            changed, cfg.gaze_distance_multiplier = imgui.drag_float("Camera Orbiting Distance", cfg.gaze_distance_multiplier, 0.1, 0.0, 1.0)
         end
         imgui.tree_pop()
     end
